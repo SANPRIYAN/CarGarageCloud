@@ -1,25 +1,46 @@
 import { getShortLivedDropboxToken } from '../dropbox/dropboxAuth';
 import { uploadFileToDropbox, getSharedLink, deleteFileFromDropbox } from '../dropbox/dropboxUpload';
-import { carService } from '../firestore/carService';
+import { carService } from '../mongodb/carService';
 
-// This is the one function that knows about BOTH Dropbox and Firestore.
-// Everything else in the app only ever talks to one or the other.
-export async function uploadCarImage({ carId, garageId, file }) {
+/**
+ * Converts a car name (make + model) into a safe Dropbox path segment.
+ * Replaces spaces/special chars with underscores, trims, lowercases.
+ * e.g. "Porsche 911 GT3" → "porsche_911_gt3"
+ */
+function toSafeName(str) {
+  return (str || 'unknown')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gi, '_')
+    .replace(/^_+|_+$/g, ''); // strip leading/trailing underscores
+}
+
+/**
+ * Uploads a car image to Dropbox using the car's name as both the folder
+ * name and the image filename (with the original extension preserved).
+ *
+ * Dropbox path structure:
+ *   /car-garage/<safeCarName>/<safeCarName>.<ext>
+ *
+ * The `autorename: true` Dropbox option handles duplicate names safely.
+ */
+export async function uploadCarImage({ carId, garageId, ownerName, file, make, model }) {
   try {
-    // Step 1: get a fresh, short-lived Dropbox token
     const accessToken = await getShortLivedDropboxToken();
 
-    // Step 2: upload the actual image file to Dropbox
-    // We sanitize the filename to avoid non-ASCII characters which break HTTP headers (Status 400)
-    const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const uniqueName = `${Date.now()}-${safeName}`;
-    const path = `/garages/${garageId}/cars/${carId}/${uniqueName}`;
-    await uploadFileToDropbox(accessToken, path, file);
+    // Build a safe name from the car's make + model
+    const carName = toSafeName(`${make || ''} ${model || ''}`) || `car_${carId}`;
 
-    // Step 3: get a link we can actually show in the browser
+    // Preserve the original file extension
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+
+    // Dropbox path: /car-garage/<carName>/<carName>.<ext>
+    const path = `/car-garage/${carName}/${carName}.${ext}`;
+
+    await uploadFileToDropbox(accessToken, path, file);
     const sharedUrl = await getSharedLink(accessToken, path);
 
-    // Step 4: save that link on the car's Firestore document
+    // Save the Dropbox path + shareable URL back to the car document
     const updateResult = await carService.update(carId, {
       imagePath: path,
       imageUrl: sharedUrl,
@@ -38,22 +59,24 @@ export async function uploadCarImage({ carId, garageId, file }) {
 
 export async function deleteCarAndImage(car) {
   try {
-    // Step 1: Delete from Firestore first
-    const deleteResult = await carService.remove(car.id);
-    if (!deleteResult.success) {
-      return { success: false, error: deleteResult.error };
-    }
+    const carId = car.id || car._id;
 
-    // Step 2: Delete from Dropbox if there's an image
+    // Step 1: Delete the image directly from Dropbox Drive
     if (car.imagePath) {
       try {
         const accessToken = await getShortLivedDropboxToken();
-        await deleteFileFromDropbox(accessToken, car.imagePath);
+        const formattedPath = car.imagePath.startsWith('/') ? car.imagePath : `/${car.imagePath}`;
+        await deleteFileFromDropbox(accessToken, formattedPath);
+        console.log(`✅ Deleted image from Dropbox: ${formattedPath}`);
       } catch (dropboxError) {
-        // We still consider the car successfully deleted from our DB, 
-        // even if Dropbox cleanup fails (e.g. file already missing).
-        console.warn('Failed to clean up Dropbox image:', dropboxError);
+        console.warn('Dropbox image deletion notice:', dropboxError.message);
       }
+    }
+
+    // Step 2: Delete the car record from MongoDB
+    const deleteResult = await carService.remove(carId);
+    if (!deleteResult.success) {
+      return { success: false, error: deleteResult.error };
     }
 
     return { success: true };

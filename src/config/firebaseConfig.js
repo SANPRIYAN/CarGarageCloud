@@ -1,26 +1,12 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
-import { getFunctions } from 'firebase/functions';
+/**
+ * DEPRECATED: Firebase has been completely replaced in car-garage-final:
+ * - Authentication: Auth0 SSO
+ * - Storage: Dropbox Cloud Storage API
+ * - Extended Database: MongoDB Atlas via Express REST API
+ */
 
-// All values come from your .env file (see notes below)
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-};
+export const db = null;
+export const auth = null;
+export const functions = null;
+export default {};
 
-// Simple check so you get a clear error instead of a confusing crash later
-const requiredKeys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'appId'];
-const missingKeys = requiredKeys.filter((key) => !firebaseConfig[key]);
-if (missingKeys.length > 0) {
-  throw new Error(`Missing Firebase config values: ${missingKeys.join(', ')}. Check your .env file.`);
-}
-
-const app = initializeApp(firebaseConfig);
-
-export const db = getFirestore(app);
-export const auth = getAuth(app);
-export const functions = getFunctions(app);

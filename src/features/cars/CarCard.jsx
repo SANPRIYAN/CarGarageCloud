@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useUpdateCar, useDeleteCar } from '../../hooks/useCars';
 
 export function CarCard({ car, currentUser }) {
+  const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [make, setMake] = useState(car.make);
   const [model, setModel] = useState(car.model);
@@ -9,14 +11,24 @@ export function CarCard({ car, currentUser }) {
   const updateCar = useUpdateCar();
   const deleteCar = useDeleteCar();
 
-  const isOwner = currentUser && (car.ownerId === currentUser.uid || car.garageId === currentUser.uid);
+  const currentUserId = currentUser?.sub || currentUser?.uid || currentUser?.id;
+  // Strict ownership check: only the owner who posted the car can edit or delete
+  const isOwner = Boolean(
+    currentUserId && (
+      car.ownerId === currentUserId ||
+      car.garageId === currentUserId ||
+      (car.ownerName && currentUser?.name && car.ownerName === currentUser.name && car.ownerName !== 'Dropbox Sync') ||
+      (car.ownerName && currentUser?.email && car.ownerName === currentUser.email)
+    )
+  );
   
   // Fallback for older cars that might not have an ownerName
   const displayName = car.ownerName || 'Unknown User';
 
   const handleUpdate = async () => {
     if (!make.trim() || !model.trim()) return;
-    await updateCar.mutateAsync({ carId: car.id, updates: { make, model } });
+    const carId = car.id || car._id;
+    await updateCar.mutateAsync({ carId, updates: { make, model } });
     setIsEditing(false);
   };
 
@@ -45,10 +57,12 @@ export function CarCard({ car, currentUser }) {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-80"></div>
         
-        {/* Owner Badge */}
-        <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 flex items-center gap-2">
-          <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500"></div>
-          <span className="text-xs font-semibold text-white truncate max-w-[120px]">{displayName}</span>
+        {/* Creator Badge on Photo */}
+        <div className="absolute top-4 left-4 bg-slate-950/70 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 flex items-center gap-2 shadow-lg">
+          <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+          <span className="text-[11px] font-semibold text-slate-200">
+            Creator: <strong className="text-white">{car.ownerName || 'Driver'}</strong>
+          </span>
         </div>
       </div>
       
@@ -74,6 +88,24 @@ export function CarCard({ car, currentUser }) {
               {car.make}
             </h3>
             <p className="text-slate-300 font-medium text-lg drop-shadow-md">{car.model}</p>
+            
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1 mb-2">
+              <svg className="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              <span>Added by: <span className="text-purple-300 font-medium">{car.ownerName || 'Driver'}</span></span>
+            </div>
+            
+            <button 
+              onClick={() => navigate(`/car/${car.id}`)}
+              className="mt-3 w-full py-2 px-4 rounded-xl text-sm font-semibold transition-all bg-gradient-to-r from-purple-600/30 to-blue-600/30 hover:from-purple-600 hover:to-blue-600 text-purple-200 hover:text-white border border-purple-500/30 flex items-center justify-center gap-1.5 shadow-md"
+            >
+              <span>View Details</span>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
           </div>
         )}
 

@@ -1,24 +1,32 @@
-import { auth } from '../config/firebaseConfig';
-import { GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+/**
+ * Authentication service for Auth0 SSO.
+ * 
+ * Provides utility functions to normalize Auth0 user profiles and manage
+ * authentication states across the Car Garage application.
+ */
 
-const googleProvider = new GoogleAuthProvider();
+/**
+ * Normalizes an Auth0 user object to ensure compatibility with both Auth0 standards
+ * and legacy component expectations (e.g., providing uid, displayName, email, picture).
+ */
+export function normalizeAuth0User(user) {
+  if (!user) return null;
 
-export const signInWithGoogle = async () => {
-  try {
-    const result = await signInWithPopup(auth, googleProvider);
-    return { success: true, user: result.user };
-  } catch (error) {
-    console.error("Error signing in with Google:", error);
-    return { success: false, error: error.message };
-  }
-};
+  const id = user.sub || user.uid || 'anonymous';
+  const name = user.name || user.nickname || user.displayName || user.email || 'Driver';
 
-export const signOutUser = async () => {
-  try {
-    await signOut(auth);
-    return { success: true };
-  } catch (error) {
-    console.error("Error signing out:", error);
-    return { success: false, error: error.message };
-  }
+  return {
+    ...user,
+    sub: id,
+    uid: id,
+    id,
+    name,
+    displayName: name,
+    email: user.email || '',
+    picture: user.picture || '',
+  };
+}
+
+export default {
+  normalizeAuth0User,
 };

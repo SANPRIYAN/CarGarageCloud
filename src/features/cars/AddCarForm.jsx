@@ -16,9 +16,10 @@ export function AddCarForm({ user }) {
     setStatus('saving');
     setErrorMsg('');
 
-    const garageId = user.uid; // Keep for backward compatibility with upload logic
-    const ownerId = user.uid;
-    const ownerName = user.displayName || user.email;
+    const userId = user?.sub || user?.uid || 'driver';
+    const garageId = userId;
+    const ownerId = userId;
+    const ownerName = user?.name || user?.nickname || user?.displayName || user?.email || 'Driver';
 
     const createResult = await createCar.mutateAsync({ garageId, ownerId, ownerName, make, model });
     if (!createResult.success) {
@@ -30,7 +31,7 @@ export function AddCarForm({ user }) {
     const carId = createResult.data;
 
     if (file) {
-      const uploadResult = await uploadImage.mutateAsync({ carId, garageId, file });
+      const uploadResult = await uploadImage.mutateAsync({ carId, garageId, ownerName, file, make, model });
       if (!uploadResult.success) {
         setStatus('error');
         setErrorMsg(`Car saved, but image upload failed: ${uploadResult.error}`);
